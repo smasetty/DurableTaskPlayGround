@@ -1,0 +1,80 @@
+# Build results
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.unsuccessfulbuild
+*.log
+*.vspscc
+*.vssscc
+
+# Mono Auto Generated Files
+mono_crash.*
+
+# VS Code directories
+.vscode/
+
+# Rider directories
+.idea/
+*.sln.iml
+
+# Visual Studio working directory
+.vs/
+
+# Backup & report files
+*.tlog
+*.log
+*.cache
+*.ide
+
+# Crash dumps, hibernation files, and more
+*.pidb
+*.pdb
+*.tmp
+*.mdb
+*.stackdump
+*.orleans
+
+# Distribution and packaging files
+*.nuget
+*.nupkg
+packages/
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# MacOS file caches
+.DS_Store
+
+# Cloud-specific files
+*.swp
+*.swo
+*.tmp
+*.temp
+*.bak
+
+# Application Insights
+ApplicationInsights.config
+
+# Local application settings
+appsettings.Development.json
+
+# Resharper files
+_ReSharper.Caches/
+
+# Assembly and generated code
+*.dll
+*.exe
+*.dll.config
+*.exe.config
+
+# Publish output
+publish/
+
+# Dotnet user secrets
+secrets.json
