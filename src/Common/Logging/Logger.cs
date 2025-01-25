@@ -1,23 +1,63 @@
-﻿namespace Common.Logging;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Common.Logging;
+
+/// <summary>
+/// Defines methods for logging messages.
+/// </summary>
+public interface ILoggerService
+{
+    /// <summary>
+    /// Logs a message with the specified source.
+    /// </summary>
+    /// <param name="source">The source of the log message.</param>
+    /// <param name="message">The log message.</param>
+    void Log(string source, string message);
+
+    /// <summary>
+    /// Logs a verbose message with the specified source.
+    /// </summary>
+    /// <param name="source">The source of the log message.</param>
+    /// <param name="message">The log message.</param>
+    void LogVerbose(string source, string message);
+
+    /// <summary>
+    /// Logs an error message with the specified source.
+    /// </summary>
+    /// <param name="source">The source of the log message.</param>
+    /// <param name="message">The log message.</param>
+    void LogError(string source, string message);
+}
 
 /// <summary>
 /// Provides logging functionality for the application.
 /// </summary>
-public static class Logger
+public class Logger: ILoggerService 
 {
-    private static bool _shouldLogVerbose = true;
+    private readonly ILogger<Logger> _logger;
+    private readonly bool _shouldLogVerbose;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Logger"/> class.
+    /// </summary>
+    /// <param name="logger">The logger instance.</param>
+    /// <param name="shouldLogVerbose">Indicates whether verbose logging is enabled.</param>
+    public Logger(ILogger<Logger> logger, bool shouldLogVerbose)
+    {
+        _logger = logger;
+        _shouldLogVerbose = shouldLogVerbose;
+    }
 
     /// <summary>
     /// Logs a message with the specified source.
     /// </summary>
     /// <param name="source">The source of the log message.</param>
     /// <param name="message">The log message.</param>
-    public static void Log(string source, string message)
+    public void Log(string source, string message)
     {
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine($"[{0}] [{source}] {message}",
-                    DateTime.UtcNow.TimeOfDay.ToString("c"));
-        Console.ResetColor();
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        _logger.LogInformation("[{Time}] [{Source}] {Message}", DateTime.UtcNow.TimeOfDay.ToString("c"), source, message);
     }
 
     /// <summary>
@@ -25,18 +65,42 @@ public static class Logger
     /// </summary>
     /// <param name="source">The source of the log message.</param>
     /// <param name="message">The log message.</param>
-    public static void LogVerbose(string source, string message)
+    public void LogVerbose(string source, string message)
     {
         if (!_shouldLogVerbose) return;
-        Log(source, message);
+        _logger.LogDebug("[{Time}] [{Source}] {Message}", DateTime.UtcNow.TimeOfDay.ToString("c"), source, message);
     }
 
     /// <summary>
-    /// Sets the verbosity level for logging.
+    /// Logs an error message with the specified source.
     /// </summary>
-    /// <param name="verbosity">If true, verbose logging is enabled; otherwise, it is disabled.</param>
-    public static void SetVerbosity(bool verbosity)
+    /// <param name="source">The source of the log message.</param>
+    /// <param name="message">The log message.</param>
+    public void LogError(string source, string message)
     {
-        _shouldLogVerbose = verbosity;
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        _logger.LogError("[{Time}] [{Source}] {Message}", DateTime.UtcNow.TimeOfDay.ToString("c"), source, message);
+    }
+}
+
+/// <summary>
+/// Provides extension methods for adding custom logging services.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Adds custom logging services to the specified <see cref="IServiceCollection"/>.
+    /// </summary>
+    /// <param name="services">The service collection to add the logging services to.</param>
+    /// <returns>The service collection with the logging services added.</returns>
+    public static IServiceCollection AddCustomLogging(this IServiceCollection services)
+    {
+        services.AddSingleton<ILoggerService, Logger>(p =>
+        {
+            var logger = p.GetRequiredService<ILogger<Logger>>();
+            return new Logger(logger, true);
+        });
+
+        return services;
     }
 }

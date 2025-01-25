@@ -7,8 +7,9 @@ namespace DurableTaskSamples.Orchestrations;
 /// <summary>
 /// Represents a simple orchestration task that processes an integer input and returns a boolean result.
 /// </summary>
-public class SimpleOrchestration : TaskOrchestration<bool, int>
+public class SimpleOrchestration(Logger logger) : TaskOrchestration<bool, int>
 {
+    private readonly Logger _logger = logger;
     private const string Source = "SimpleOrchestration";
 
     /// <summary>
@@ -22,17 +23,17 @@ public class SimpleOrchestration : TaskOrchestration<bool, int>
     {
         try
         {
-            Logger.Log(Source, $"Initiating, IsReplaying: {context.IsReplaying}");
+            _logger.Log(Source, $"Initiating, IsReplaying: {context.IsReplaying}");
             await context.ScheduleTask<bool>(typeof(SimpleGreetingActivity), input);
             await context.ScheduleTask<bool>(typeof(SimpleGreetingActivity), input);
             await context.ScheduleTask<bool>(typeof(SimpleGreetingActivity), 555);
-            Logger.Log(Source, "Completed");
+            _logger.Log(Source, "Completed");
 
             return true;
         }
         catch (Exception ex)
         {
-            Logger.Log(Source, ex.ToString());
+            _logger.Log(Source, ex.ToString());
             return false;
         }
     }

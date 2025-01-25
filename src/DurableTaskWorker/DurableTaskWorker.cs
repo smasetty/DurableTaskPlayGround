@@ -2,49 +2,36 @@
 using DurableTask.Core;
 using DurableTaskSamples.Activities;
 using DurableTaskSamples.Orchestrations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ConfigurationManager = System.Configuration.ConfigurationManager;
 
 namespace DurableTaskWorker;
-internal class DurableTaskWorker 
+
+/// <summary>
+/// Represents a worker that manages the lifecycle of a Durable Task Hub.
+/// </summary>
+internal class DurableTaskWorker
 {
-    private TaskHubWorker? taskHubWorker;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<DurableTaskWorker> _logger;
+    private readonly AzureStorageOrchestrationService _orchestrationService;
+    private TaskHubWorker? _taskHubWorker;
 
     /// <summary>
-    /// Gets the Azure Storage Orchestration Service handle.
+    /// Initializes a new instance of the <see cref="DurableTaskWorker"/> class.
     /// </summary>
-    /// <returns>An instance of <see cref="AzureStorageOrchestrationService"/>.</returns>
-    public static AzureStorageOrchestrationService GetAzureStorageOrchestrationServiceHandle()
+    /// <param name="configuration">The configuration settings.</param>
+    /// <param name="logger">The logger instance.</param>
+    /// <param name="orchestrationService">The Azure Storage Orchestration Service instance.</param>
+    public DurableTaskWorker(
+        IConfiguration configuration,
+        ILogger<DurableTaskWorker> logger,
+        AzureStorageOrchestrationService orchestrationService)
     {
-        var storageConnectionString = ConfigurationManager.AppSettings["AzureStorageConnectionString"];
-        if (string.IsNullOrEmpty(storageConnectionString))
-        {
-            Console.WriteLine($"Azure storage connection string is empty");
-            Environment.Exit(0);
-        }
-
-        var taskHubName = ConfigurationManager.AppSettings["TaskHubName"];
-        if (string.IsNullOrEmpty(taskHubName))
-        {
-            Console.WriteLine($"Task Hub name is empty");
-            Environment.Exit(0);
-        }
-
-        var azureStorageSettings = new AzureStorageOrchestrationServiceSettings
-        {
-            StorageAccountClientProvider = new StorageAccountClientProvider(storageConnectionString),
-            TaskHubName = taskHubName,
-        };
-
-        var shouldLogAzureStorageEvents = bool.Parse(ConfigurationManager.AppSettings["LogAzureStorageTraces"] ?? string.Empty);
-        if (shouldLogAzureStorageEvents)
-        {
-            LoggerFactory.Create(b => b.AddConsole());
-        }
-
-        var orchestrationServiceAndClient = new AzureStorageOrchestrationService(azureStorageSettings);
-
-        return orchestrationServiceAndClient;
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _orchestrationService = orchestrationService ?? throw new ArgumentNullException(nameof(orchestrationService));
     }
 
     /// <summary>
@@ -53,20 +40,78 @@ internal class DurableTaskWorker
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task StartAsync()
     {
-        taskHubWorker = new TaskHubWorker(GetAzureStorageOrchestrationServiceHandle());
-
-        taskHubWorker.AddTaskOrchestrations(typeof(SimpleOrchestration))
+        _taskHubWorker = new TaskHubWorker(_orchestrationService);
+        _taskHubWorker.AddTaskOrchestrations(typeof(SimpleOrchestration))
             .AddTaskActivities(typeof(SimpleGreetingActivity));
-
-        await taskHubWorker.StartAsync();
+        await _taskHubWorker.StartAsync();
     }
 
     /// <summary>
     /// Stops the Task Hub Worker asynchronously.
     /// </summary>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    public void Stop()
+    public async Task StopAsync()
     {
-        taskHubWorker?.Dispose();
+        if (_taskHubWorker != null)
+        {
+            await _taskHubWorker.StopAsync();
+            _taskHubWorker.Dispose();
+        }
+    }
+}
+
+/// <summary>
+/// Provides extension methods for adding Durable Task Worker services to an IServiceCollection.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Adds the Durable Task Worker services to the specified IServiceCollection.
+    /// </summary>
+    /// <param name="services">The IServiceCollection to add the services to.</param>
+    /// <returns>The IServiceCollection with the Durable Task Worker services added.</returns>
+    public static IServiceCollection AddDurableTaskWorker(this IServiceCollection services)
+    {
+        services.AddSingleton(provider =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            var logger = provider.GetRequiredService<ILogger<DurableTaskWorker>>();
+            var storageConnectionString = configuration["AzureStorageConnectionString"];
+            var taskHubName = configuration["TaskHubName"];
+
+            if (string.IsNullOrEmpty(storageConnectionString))
+            {
+                throw new ArgumentNullException(
+                    nameof(storageConnectionString),
+                    "Azure Storage connection string is not configured.");
+            }
+
+            if (string.IsNullOrEmpty(taskHubName))
+            {
+                throw new ArgumentNullException(
+                    nameof(taskHubName),
+                    "Task Hub name is not configured.");
+            }
+
+            logger.LogInformation($"Configuration values: AzureStorageConnectionString={storageConnectionString}, TaskHubName={taskHubName}");
+
+            var azureStorageSettings = new AzureStorageOrchestrationServiceSettings
+            {
+                StorageAccountClientProvider = new StorageAccountClientProvider(storageConnectionString),
+                TaskHubName = taskHubName,
+            };
+
+            if (bool.TryParse(configuration["LogAzureStorageTraces"], out var shouldLogAzureStorageEvents)
+                && shouldLogAzureStorageEvents)
+            {
+                var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+                loggerFactory.CreateLogger<DurableTaskWorker>();
+            }
+
+            return new AzureStorageOrchestrationService(azureStorageSettings);
+        });
+
+        services.AddSingleton<DurableTaskWorker>();
+
+        return services;
     }
 }
