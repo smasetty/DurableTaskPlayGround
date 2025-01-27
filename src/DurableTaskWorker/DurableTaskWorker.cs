@@ -1,4 +1,6 @@
-﻿using DurableTask.AzureStorage;
+﻿using Azure.Core;
+using Azure.Identity;
+using DurableTask.AzureStorage;
 using DurableTask.Core;
 using DurableTaskSamples.Activities;
 using DurableTaskSamples.Orchestrations;
@@ -68,6 +70,7 @@ public static class ServiceCollectionExtensions
     /// Adds the Durable Task Worker services to the specified IServiceCollection.
     /// </summary>
     /// <param name="services">The IServiceCollection to add the services to.</param>
+    /// <exception cref="ArgumentNullException"></exception>
     /// <returns>The IServiceCollection with the Durable Task Worker services added.</returns>
     public static IServiceCollection AddDurableTaskWorker(this IServiceCollection services)
     {
@@ -75,13 +78,13 @@ public static class ServiceCollectionExtensions
         {
             var configuration = provider.GetRequiredService<IConfiguration>();
             var logger = provider.GetRequiredService<ILogger<DurableTaskWorker>>();
-            var storageConnectionString = configuration["AzureStorageConnectionString"];
+            var storageAccountName = configuration["StorageAccountName"];
             var taskHubName = configuration["TaskHubName"];
 
-            if (string.IsNullOrEmpty(storageConnectionString))
+            if (string.IsNullOrEmpty(storageAccountName))
             {
                 throw new ArgumentNullException(
-                    nameof(storageConnectionString),
+                    nameof(storageAccountName),
                     "Azure Storage connection string is not configured.");
             }
 
@@ -92,11 +95,26 @@ public static class ServiceCollectionExtensions
                     "Task Hub name is not configured.");
             }
 
-            logger.LogInformation($"Configuration values: AzureStorageConnectionString={storageConnectionString}, TaskHubName={taskHubName}");
+            logger.LogInformation($"Configuration values: AzureStorageAccountName={storageAccountName},\nTaskHubName={taskHubName}");
+
+            var credential = new DefaultAzureCredential();
+
+            //             // Define the Azure resource scope you want the token for
+            // var tokenRequestContext = new TokenRequestContext(new[] { "https://storage.azure.com/.default" });
+            //
+            // // Attempt to acquire a token
+            // var token = credential.GetToken(tokenRequestContext);
+            //
+            // // If successful, display token details
+            // Console.WriteLine("Token acquired successfully!");
+            // Console.WriteLine($"Token: {token.Token}");
+            // Console.WriteLine($"Expires On: {token.ExpiresOn}");
+
+            logger.LogInformation($"Configuration values: credential={credential}");
 
             var azureStorageSettings = new AzureStorageOrchestrationServiceSettings
             {
-                StorageAccountClientProvider = new StorageAccountClientProvider(storageConnectionString),
+                StorageAccountClientProvider = new StorageAccountClientProvider(storageAccountName, credential),
                 TaskHubName = taskHubName,
             };
 
