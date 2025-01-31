@@ -1,5 +1,4 @@
-﻿using Azure.Core;
-using Azure.Identity;
+﻿using Azure.Identity;
 using DurableTask.AzureStorage;
 using DurableTask.Core;
 using DurableTaskSamples.Activities;
@@ -15,9 +14,25 @@ namespace DurableTaskWorker;
 /// </summary>
 internal class DurableTaskWorker
 {
+    /// <summary>
+    /// The configuration settings for the worker.
+    /// </summary>
     private readonly IConfiguration _configuration;
+
+    /// <summary>
+    /// The logger instance for the worker.
+    /// </summary>
     private readonly ILogger<DurableTaskWorker> _logger;
+
+    /// <summary>
+    /// The Azure Storage orchestration service that manages task persistence and communication.
+    /// </summary>
     private readonly AzureStorageOrchestrationService _orchestrationService;
+
+    /// <summary>
+    /// The task hub worker instance that processes orchestrations and activities.
+    /// Can be null before StartAsync is called or after StopAsync is called.
+    /// </summary>
     private TaskHubWorker? _taskHubWorker;
 
     /// <summary>
@@ -43,8 +58,13 @@ internal class DurableTaskWorker
     public async Task StartAsync()
     {
         _taskHubWorker = new TaskHubWorker(_orchestrationService);
-        _taskHubWorker.AddTaskOrchestrations(typeof(SimpleOrchestration))
-            .AddTaskActivities(typeof(SimpleGreetingActivity));
+        _taskHubWorker.AddTaskOrchestrations(
+            typeof(SimpleOrchestration),
+            typeof(ComplexOrchestration))
+            .AddTaskActivities(
+                typeof(SimpleGreetingActivity),
+                typeof(SumActivity));
+
         await _taskHubWorker.StartAsync();
     }
 
@@ -98,17 +118,6 @@ public static class ServiceCollectionExtensions
             logger.LogInformation($"Configuration values: AzureStorageAccountName={storageAccountName},\nTaskHubName={taskHubName}");
 
             var credential = new DefaultAzureCredential();
-
-            //             // Define the Azure resource scope you want the token for
-            // var tokenRequestContext = new TokenRequestContext(new[] { "https://storage.azure.com/.default" });
-            //
-            // // Attempt to acquire a token
-            // var token = credential.GetToken(tokenRequestContext);
-            //
-            // // If successful, display token details
-            // Console.WriteLine("Token acquired successfully!");
-            // Console.WriteLine($"Token: {token.Token}");
-            // Console.WriteLine($"Expires On: {token.ExpiresOn}");
 
             logger.LogInformation($"Configuration values: credential={credential}");
 

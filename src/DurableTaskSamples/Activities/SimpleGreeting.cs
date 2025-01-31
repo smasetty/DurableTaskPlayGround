@@ -6,10 +6,21 @@ namespace DurableTaskSamples.Activities;
 /// <summary>
 /// Represents an activity that performs a simple greeting task.
 /// </summary>
-public class SimpleGreetingActivity(Logger logger) : AsyncTaskActivity<int, bool>
+public sealed class SimpleGreetingActivity : AsyncTaskActivity<int, bool>
 {
-    private readonly Logger _logger = logger;
-    private const string Source = "SimpleGreetingActivity";
+    private readonly Logger _logger;
+    private const string Source = nameof(SimpleGreetingActivity);
+    private const int MinimumValidInput = 2;
+    private static readonly TimeSpan ProcessingDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SimpleGreetingActivity"/> class.
+    /// </summary>
+    /// <param name="logger">The logger instance.</param>
+    public SimpleGreetingActivity(Logger logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
     /// <summary>
     /// Executes the activity asynchronously.
@@ -20,19 +31,29 @@ public class SimpleGreetingActivity(Logger logger) : AsyncTaskActivity<int, bool
     /// The task result contains a boolean value indicating the success of the activity.</returns>
     protected override async Task<bool> ExecuteAsync(TaskContext context, int input)
     {
-        _logger.LogVerbose(Source, "Starting");
+        ArgumentNullException.ThrowIfNull(context);
 
-        await Task.Delay(5).ConfigureAwait(false);
-        _logger.Log(Source, $"Executing {input}");
+        try
+        {
+            _logger.LogVerbose(Source, "Starting");
 
-        await Task.Delay(2000).ConfigureAwait(false);
-        _logger.LogVerbose(Source, "Completed");
+            await Task.Delay(ProcessingDelay);
+            _logger.Log(Source, $"Executing {input}");
 
-        // If the input is greater than or equal to 2,
-        // the activity is considered successful.
-        if (input >= 2) return true;
+            if (input < MinimumValidInput)
+            {
+                _logger.Log(Source, "Invalid input");
+                return false;
+            }
 
-        _logger.Log(Source, "Invalid input");
-        return false;
+            _logger.LogVerbose(Source, "Completed");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Log(Source, $"Error processing input: {ex}");
+            throw;
+        }
     }
 }
+
