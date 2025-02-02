@@ -8,7 +8,7 @@ namespace DurableTaskSamples.Activities;
 /// </summary>
 public sealed class SimpleGreetingActivity : AsyncTaskActivity<int, bool>
 {
-    private readonly Logger _logger;
+    private readonly ILoggerService _logger;
     private const string Source = nameof(SimpleGreetingActivity);
     private const int MinimumValidInput = 2;
     private static readonly TimeSpan ProcessingDelay = TimeSpan.FromSeconds(2);
@@ -17,7 +17,7 @@ public sealed class SimpleGreetingActivity : AsyncTaskActivity<int, bool>
     /// Initializes a new instance of the <see cref="SimpleGreetingActivity"/> class.
     /// </summary>
     /// <param name="logger">The logger instance.</param>
-    public SimpleGreetingActivity(Logger logger)
+    public SimpleGreetingActivity(ILoggerService logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

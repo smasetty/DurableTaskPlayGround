@@ -1,11 +1,13 @@
-﻿using Azure.Identity;
+﻿using Common.Logging;
 using DurableTask.AzureStorage;
 using DurableTask.Core;
+using DurableTask.Core.Tracing;
 using DurableTaskSamples.Activities;
 using DurableTaskSamples.Orchestrations;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Practices.EnterpriseLibrary.SemanticLogging;
+using System.Diagnostics.Tracing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace DurableTaskWorker;
 
@@ -22,7 +24,7 @@ internal class DurableTaskWorker
     /// <summary>
     /// The logger instance for the worker.
     /// </summary>
-    private readonly ILogger<DurableTaskWorker> _logger;
+    private readonly ILoggerService _logger;
 
     /// <summary>
     /// The Azure Storage orchestration service that manages task persistence and communication.
@@ -36,19 +38,27 @@ internal class DurableTaskWorker
     private TaskHubWorker? _taskHubWorker;
 
     /// <summary>
+    /// The service provider for dependency injection.
+    /// </summary>
+    private readonly IServiceProvider _serviceProvider;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="DurableTaskWorker"/> class.
     /// </summary>
     /// <param name="configuration">The configuration settings.</param>
     /// <param name="logger">The logger instance.</param>
     /// <param name="orchestrationService">The Azure Storage Orchestration Service instance.</param>
+    /// <param name="serviceProvider">The service provider for dependency injection.</param>
     public DurableTaskWorker(
         IConfiguration configuration,
-        ILogger<DurableTaskWorker> logger,
-        AzureStorageOrchestrationService orchestrationService)
+        ILoggerService logger,
+        AzureStorageOrchestrationService orchestrationService,
+        IServiceProvider serviceProvider)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _orchestrationService = orchestrationService ?? throw new ArgumentNullException(nameof(orchestrationService));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
 
     /// <summary>
@@ -57,13 +67,21 @@ internal class DurableTaskWorker
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task StartAsync()
     {
+        if (_configuration.GetValue<bool>("ShouldLogVerbose"))
+        {
+            var eventListener = new ObservableEventListener();
+            eventListener.LogToConsole(formatter: new DtfEventFormatter());
+            eventListener.EnableEvents(DefaultEventSource.Log, EventLevel.Informational);
+        }
+
         _taskHubWorker = new TaskHubWorker(_orchestrationService);
-        _taskHubWorker.AddTaskOrchestrations(
-            typeof(SimpleOrchestration),
-            typeof(ComplexOrchestration))
-            .AddTaskActivities(
-                typeof(SimpleGreetingActivity),
-                typeof(SumActivity));
+
+        // Register orchestrations and activities with DI support
+        _taskHubWorker.AddTaskOrchestrations(new DependencyInjectionObjectCreator<TaskOrchestration>(_serviceProvider, typeof(SimpleOrchestration)));
+        // _taskHubWorker.AddTaskOrchestrations(new DependencyInjectionObjectCreator<TaskOrchestration>(_serviceProvider, typeof(ComplexOrchestration)));
+
+        _taskHubWorker.AddTaskActivities(new DependencyInjectionObjectCreator<TaskActivity>(_serviceProvider, typeof(SimpleGreetingActivity)));
+        // _taskHubWorker.AddTaskActivities(new DependencyInjectionObjectCreator<TaskActivity>(_serviceProvider, typeof(SumActivity)));
 
         await _taskHubWorker.StartAsync();
     }
@@ -82,63 +100,47 @@ internal class DurableTaskWorker
 }
 
 /// <summary>
-/// Provides extension methods for adding Durable Task Worker services to an IServiceCollection.
+/// Creates objects using dependency injection or falls back to default creation
 /// </summary>
-public static class ServiceCollectionExtensions
+/// <typeparam name="T">The type of object to create</typeparam>
+/// <summary>
+/// Creates objects using dependency injection or falls back to default creation.
+/// This class extends DefaultObjectCreator to provide DI support for creating task orchestrations and activities.
+/// </summary>
+/// <typeparam name="T">The type of object to create. Must be a class.</typeparam>
+public class DependencyInjectionObjectCreator<T> : DefaultObjectCreator<T> where T : class
 {
     /// <summary>
-    /// Adds the Durable Task Worker services to the specified IServiceCollection.
+    /// The service provider used for dependency injection.
     /// </summary>
-    /// <param name="services">The IServiceCollection to add the services to.</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <returns>The IServiceCollection with the Durable Task Worker services added.</returns>
-    public static IServiceCollection AddDurableTaskWorker(this IServiceCollection services)
+    private readonly IServiceProvider _serviceProvider;
+
+    /// <summary>
+    /// The type of object to create.
+    /// </summary>
+    private readonly Type _type;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DependencyInjectionObjectCreator{T}"/> class.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider for dependency injection.</param>
+    /// <param name="type">The type of object to create.</param>
+    /// <exception cref="ArgumentNullException">Thrown when serviceProvider or type is null.</exception>
+    public DependencyInjectionObjectCreator(IServiceProvider serviceProvider, Type type)
+        :base(type)
     {
-        services.AddSingleton(provider =>
-        {
-            var configuration = provider.GetRequiredService<IConfiguration>();
-            var logger = provider.GetRequiredService<ILogger<DurableTaskWorker>>();
-            var storageAccountName = configuration["StorageAccountName"];
-            var taskHubName = configuration["TaskHubName"];
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _type = type ?? throw new ArgumentNullException(nameof(type));
+    }
 
-            if (string.IsNullOrEmpty(storageAccountName))
-            {
-                throw new ArgumentNullException(
-                    nameof(storageAccountName),
-                    "Azure Storage connection string is not configured.");
-            }
-
-            if (string.IsNullOrEmpty(taskHubName))
-            {
-                throw new ArgumentNullException(
-                    nameof(taskHubName),
-                    "Task Hub name is not configured.");
-            }
-
-            logger.LogInformation($"Configuration values: AzureStorageAccountName={storageAccountName},\nTaskHubName={taskHubName}");
-
-            var credential = new DefaultAzureCredential();
-
-            logger.LogInformation($"Configuration values: credential={credential}");
-
-            var azureStorageSettings = new AzureStorageOrchestrationServiceSettings
-            {
-                StorageAccountClientProvider = new StorageAccountClientProvider(storageAccountName, credential),
-                TaskHubName = taskHubName,
-            };
-
-            if (bool.TryParse(configuration["LogAzureStorageTraces"], out var shouldLogAzureStorageEvents)
-                && shouldLogAzureStorageEvents)
-            {
-                var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-                loggerFactory.CreateLogger<DurableTaskWorker>();
-            }
-
-            return new AzureStorageOrchestrationService(azureStorageSettings);
-        });
-
-        services.AddSingleton<DurableTaskWorker>();
-
-        return services;
+    /// <summary>
+    /// Creates an instance of the specified type using dependency injection.
+    /// </summary>
+    /// <returns>An instance of type T.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when object creation fails.</exception>
+    public override T Create()
+    {
+        return ActivatorUtilities.GetServiceOrCreateInstance(_serviceProvider, _type) as T 
+            ?? throw new InvalidOperationException($"Failed to create instance of type {_type.Name}");
     }
 }

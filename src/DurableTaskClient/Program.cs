@@ -1,3 +1,5 @@
+using Common.Logging;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,19 +31,28 @@ public static class Program
         Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((hostingContext, config) =>
             {
+                var env = hostingContext.HostingEnvironment;
+
                 var envVariable = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
                 if (!string.IsNullOrEmpty(envVariable))
                 {
                     hostingContext.HostingEnvironment.EnvironmentName = envVariable;
                 }
+
+                config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables()
+                    .AddCommandLine(args);
             })
             .ConfigureLogging(logging =>
             {
+                // TODO: cleanup the logging mess
                 logging.ClearProviders();
                 logging.AddConsole();
             })
             .ConfigureServices((context, services) =>
             {
+                services.AddSingleton<ILoggerService, Logger>();
                 services.AddDurableTaskClient(context.Configuration);
                 services.AddHostedService<OrchestrationClient>();
             });

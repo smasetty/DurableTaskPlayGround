@@ -58,7 +58,8 @@ internal class Program
                 logging.AddConsole();
             })
             .ConfigureServices((_, services) =>
-                services.AddHostedService<Worker>()
+                services.AddSingleton<ILoggerService, Logger>()
+                    .AddHostedService<Worker>()
                     .AddCustomLogging()
                     .AddDurableTaskWorker());
 }

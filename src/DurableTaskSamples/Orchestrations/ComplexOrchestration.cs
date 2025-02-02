@@ -7,10 +7,15 @@ namespace DurableTaskSamples.Orchestrations;
 /// <summary>
 /// Represents a complex orchestration task that processes a list of integers and returns the sum of the results.
 /// </summary>
-public sealed class ComplexOrchestration(Logger logger) : TaskOrchestration<int, List<int>>
+public sealed class ComplexOrchestration : TaskOrchestration<int, List<int>>
 {
-    private readonly Logger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILoggerService _logger;
     private const string Source = nameof(ComplexOrchestration);
+
+    public ComplexOrchestration(ILoggerService logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
     /// <summary>
     /// Runs the orchestration task.

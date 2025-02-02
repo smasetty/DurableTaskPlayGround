@@ -19,18 +19,18 @@ public sealed class OrchestrationClient(
         {
             try
             {
-                // Example: Schedule a ComplexOrchestration
-                var input = new List<int> { 1, 2, 3, 4, 5 };
+                // Schedule a SimpleOrchestration
+                var input = 42;  // Simple integer input
                 var instanceId = await _taskHubClient.CreateOrchestrationInstanceAsync(
-                    typeof(ComplexOrchestration),
+                    typeof(SimpleOrchestration),
                     input);
 
-                _logger.LogInformation("Started ComplexOrchestration with ID: {InstanceId}", instanceId);
+                _logger.LogInformation("Started SimpleOrchestration with ID: {InstanceId}", instanceId);
 
                 // Wait for orchestration to complete
                 var state = await _taskHubClient.WaitForOrchestrationAsync(
                     instanceId,
-                    TimeSpan.FromMinutes(5),
+                    TimeSpan.FromMinutes(1),
                     stoppingToken);
 
                 if (state.OrchestrationStatus == OrchestrationStatus.Completed)
@@ -45,7 +45,7 @@ public sealed class OrchestrationClient(
                 }
 
                 // Wait before starting next orchestration
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             }
             catch (Exception ex)
             {
