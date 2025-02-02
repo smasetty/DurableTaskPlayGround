@@ -1,8 +1,10 @@
 using Azure.Identity;
+using Common.Logging;
 using DurableTask.AzureStorage;
 using DurableTask.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DurableTaskClient;
 
@@ -35,11 +37,15 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<TaskHubClient>(sp =>
         {
+            var logger = sp.GetRequiredService<ILoggerService>();
             var storageAccountName = configuration["StorageAccountName"];
             var taskHubName = configuration["TaskHubName"];
 
             ArgumentException.ThrowIfNullOrEmpty(storageAccountName);
             ArgumentException.ThrowIfNullOrEmpty(taskHubName);
+
+            logger.Log(nameof(ServiceCollectionExtensions), 
+                $"Configuring TaskHubClient with storage account: {storageAccountName}");
 
             var settings = new AzureStorageOrchestrationServiceSettings
             {
@@ -48,6 +54,15 @@ public static class ServiceCollectionExtensions
                     new DefaultAzureCredential()),
                 TaskHubName = taskHubName
             };
+
+            var logAzureStorageTraces = configuration["LogAzureStorageTraces"];
+            if (!string.IsNullOrEmpty(logAzureStorageTraces) && 
+                bool.TryParse(logAzureStorageTraces, out var shouldLogAzureStorageEvents) && 
+                shouldLogAzureStorageEvents)
+            {
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                settings.LoggerFactory = loggerFactory;
+            }
 
             var orchestrationService = new AzureStorageOrchestrationService(settings);
             return new TaskHubClient(orchestrationService);

@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.1" />
+    <PackageReference Include="EnterpriseLibrary.SemanticLogging.NetCore" Version="2.0.1406.4" />
   </ItemGroup>
 
   <ItemGroup>

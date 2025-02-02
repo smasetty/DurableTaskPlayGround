@@ -6,11 +6,27 @@ namespace DurableTaskSamples.Activities;
 /// <summary>
 /// Represents an activity that processes an integer input and returns the input added to a constant value.
 /// </summary>
-public sealed class SumActivity(Logger logger) : AsyncTaskActivity<int, int>
+public sealed class SumActivity(ILoggerService logger) : AsyncTaskActivity<int, int>
 {
-    private readonly Logger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    /// <summary>
+    /// The logger service used for activity logging.
+    /// </summary>
+    private readonly ILoggerService _logger = logger ??
+        throw new ArgumentNullException(nameof(logger));
+
+    /// <summary>
+    /// The source name used for logging, set to the class name.
+    /// </summary>
     private const string Source = nameof(SumActivity);
+
+    /// <summary>
+    /// The constant value that will be added to the input number.
+    /// </summary>
     private const int AddValue = 10;
+
+    /// <summary>
+    /// The simulated processing delay for the activity.
+    /// </summary>
     private static readonly TimeSpan ProcessingDelay = TimeSpan.FromSeconds(1);
 
     /// <summary>

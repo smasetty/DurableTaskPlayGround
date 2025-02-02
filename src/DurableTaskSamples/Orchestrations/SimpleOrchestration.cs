@@ -7,10 +7,19 @@ namespace DurableTaskSamples.Orchestrations;
 /// <summary>
 /// Represents a simple orchestration task that processes an integer input and returns a boolean result.
 /// </summary>
-public sealed class SimpleOrchestration(Logger logger) : TaskOrchestration<bool, int>
+public sealed class SimpleOrchestration : TaskOrchestration<bool, int>
 {
-    private readonly Logger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILoggerService _logger;
     private const string Source = nameof(SimpleOrchestration);
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SimpleOrchestration"/> class.
+    /// </summary>
+    /// <param name="logger">The logger service to use for logging.</param>
+    public SimpleOrchestration(ILoggerService logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
     /// <summary>
     /// Runs the orchestration task.
@@ -25,7 +34,8 @@ public sealed class SimpleOrchestration(Logger logger) : TaskOrchestration<bool,
 
         try
         {
-            _logger.Log(Source, $"Initiating, IsReplaying: {context.IsReplaying}");
+            _logger.LogVerbose(Source, 
+                $"starting {nameof(SimpleOrchestration)}, IsReplaying: {context.IsReplaying}");
 
             // Execute activities in sequence
             var results = await Task.WhenAll(
@@ -34,13 +44,13 @@ public sealed class SimpleOrchestration(Logger logger) : TaskOrchestration<bool,
                 context.ScheduleTask<bool>(typeof(SimpleGreetingActivity), 555)
             );
 
-            _logger.Log(Source, "Completed");
+            _logger.LogVerbose(Source, "Completed");
             return results.All(result => result);
         }
         catch (Exception ex)
         {
-            _logger.Log(Source, $"Error in orchestration: {ex}");
-            throw; // Better to let the orchestration framework handle errors
+            _logger.LogError(Source, $"Error in orchestration: {ex}");
+            throw;// Better to let the orchestration framework handle errors
         }
     }
 }

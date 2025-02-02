@@ -43,7 +43,7 @@ public class Logger: ILoggerService
     /// </summary>
     /// <param name="logger">The logger instance.</param>
     /// <param name="shouldLogVerbose">Indicates whether verbose logging is enabled.</param>
-    public Logger(ILogger<Logger> logger, bool shouldLogVerbose)
+    public Logger(ILogger<Logger> logger, bool shouldLogVerbose = true)
     {
         _logger = logger;
         _shouldLogVerbose = shouldLogVerbose;
