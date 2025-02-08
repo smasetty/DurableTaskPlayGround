@@ -7,6 +7,7 @@ using DurableTaskSamples.Orchestrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Practices.EnterpriseLibrary.SemanticLogging;
 using System.Diagnostics.Tracing;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DurableTaskWorker;
@@ -76,14 +77,57 @@ internal class DurableTaskWorker
 
         _taskHubWorker = new TaskHubWorker(_orchestrationService);
 
-        // Register orchestrations and activities with DI support
-        _taskHubWorker.AddTaskOrchestrations(new DependencyInjectionObjectCreator<TaskOrchestration>(_serviceProvider, typeof(SimpleOrchestration)));
-        // _taskHubWorker.AddTaskOrchestrations(new DependencyInjectionObjectCreator<TaskOrchestration>(_serviceProvider, typeof(ComplexOrchestration)));
+        // Discover and register orchestrations
+        Assembly assembly;
+        try 
+        {
+            var assemblyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DurableTaskSamples.dll");
+            assembly = Assembly.LoadFrom(assemblyPath);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to load DurableTaskSamples assembly: {ex.Message}", ex);
+        }
 
-        _taskHubWorker.AddTaskActivities(new DependencyInjectionObjectCreator<TaskActivity>(_serviceProvider, typeof(SimpleGreetingActivity)));
-        // _taskHubWorker.AddTaskActivities(new DependencyInjectionObjectCreator<TaskActivity>(_serviceProvider, typeof(SumActivity)));
+        if (assembly == null)
+        {
+            throw new InvalidOperationException("Could not find DurableTaskSamples assembly");
+        }
+
+        var orchestrationTypes = DiscoverTypes<TaskOrchestration>(assembly);
+        foreach (var type in orchestrationTypes)
+        {
+            _logger.Log(nameof(DurableTaskWorker), $"Registering orchestration: {type.Name}");
+            _taskHubWorker.AddTaskOrchestrations(
+                new DependencyInjectionObjectCreator<TaskOrchestration>(_serviceProvider, type));
+        }
+
+        // Discover and register activities
+        var activityTypes = DiscoverTypes<TaskActivity>(assembly);
+        foreach (var type in activityTypes)
+        {
+            _logger.Log(nameof(DurableTaskWorker), $"Registering activity: {type.Name}");
+            _taskHubWorker.AddTaskActivities(
+                new DependencyInjectionObjectCreator<TaskActivity>(_serviceProvider, type));
+        }
 
         await _taskHubWorker.StartAsync();
+    }
+
+    /// <summary>
+    /// Discovers and returns all non-abstract types that implement or inherit from the specified type T.
+    /// </summary>
+    /// <typeparam name="T">The base type or interface to search for. Must be a class.</typeparam>
+    /// <returns>An enumerable collection of Types that are assignable to T and are not abstract.</returns>
+    /// <remarks>
+    /// This method searches the current assembly for all types that:
+    /// - Are not abstract
+    /// - Can be assigned to type T (inherit from or implement T)
+    /// </remarks>
+    private IEnumerable<Type> DiscoverTypes<T>(Assembly assembly) where T : class
+    {
+        return assembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(T).IsAssignableFrom(t));
     }
 
     /// <summary>
